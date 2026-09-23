@@ -33,28 +33,75 @@
   color: var(--color-text-muted);
 }
 
+/* Reports what has actually been written, so it stays neutral until a save
+   has happened. Failures are not shown here: they get their own alert. */
 .settings-save-status {
-  background: var(--color-success-bg);
-  border: 1px solid var(--color-success-border);
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
   border-radius: 999px;
-  color: var(--color-success-text);
+  color: var(--color-text-muted);
   font-size: 13px;
   font-weight: 800;
   padding: 8px 12px;
   white-space: nowrap;
 }
 
-.settings-save-status.is-error {
-  background: var(--color-error-bg);
-  border-color: var(--color-error-border);
-  color: var(--color-error-text);
-  white-space: normal;
-}
-
 .settings-save-status.is-unsaved {
   background: var(--color-warning-bg);
   border-color: var(--color-warning-border);
   color: var(--color-warning-text);
+}
+
+.settings-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+/* Page-level messages: a save that failed, or stored settings that could not
+   be read as written. */
+.settings-banner {
+  align-items: flex-start;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+}
+
+.settings-banner.is-error {
+  background: var(--color-error-bg);
+  border-color: var(--color-error-border);
+  color: var(--color-error-text);
+}
+
+.settings-banner.is-warning {
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
+  color: var(--color-warning-text);
+}
+
+.settings-banner-copy {
+  flex: 1;
+}
+
+.settings-banner-title {
+  font-size: 15px;
+  font-weight: 800;
+  margin: 0 0 4px;
+}
+
+.settings-banner-message {
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0;
 }
 
 .settings-device-notice {
@@ -92,6 +139,11 @@
 
 .settings-interface-card {
   grid-column: 1 / -1;
+}
+
+/* Sits in the wide column, beside the account card. */
+.settings-alerts-card {
+  grid-column: 1;
 }
 
 .settings-card-heading,
@@ -169,10 +221,20 @@
 }
 
 .settings-theme-actions {
+  align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   justify-content: flex-end;
   margin-top: 18px;
+}
+
+/* Says which theme is pending, beside the Save that would keep it. */
+.settings-unsaved-hint {
+  color: var(--color-warning-text);
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 auto 0 0;
 }
 
 .settings-preference-section {
@@ -185,19 +247,6 @@
   border-top: 0;
   margin-top: 0;
   padding-top: 0;
-}
-
-.settings-restore-section {
-  align-items: center;
-  display: flex;
-  gap: 14px;
-  justify-content: space-between;
-}
-
-.settings-restore-section h3 {
-  color: var(--color-heading);
-  font-size: 17px;
-  margin: 0;
 }
 
 .settings-choice-fieldset {
@@ -368,7 +417,9 @@
 .settings-reset-btn:focus-visible,
 .settings-theme-save-btn:focus-visible,
 .settings-option input:focus-visible,
-.settings-action-btn:focus-visible {
+.settings-action-btn:focus-visible,
+.settings-danger-btn:focus-visible,
+.settings-banner button:focus-visible {
   outline: var(--focus-outline);
   outline-offset: 2px;
   box-shadow: var(--focus-shadow);
@@ -432,14 +483,86 @@
   color: var(--color-text);
 }
 
-.danger-btn {
-  background: #ef4444;
-  color: #ffffff;
+.secondary-btn:hover {
+  background: var(--color-interactive-surface-hover);
 }
 
-.secondary-btn:hover,
-.danger-btn:hover {
-  opacity: 0.95;
+/* Destructive actions. These discard saved data or end the session, so they
+   never share the styling of an ordinary setting. */
+.settings-danger-btn {
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  color: var(--color-error-text);
+  font-weight: 800;
+}
+
+.settings-danger-btn:hover {
+  background: var(--color-error-border);
+}
+
+.settings-reset-btn.is-destructive {
+  border-color: var(--color-error-border);
+  color: var(--color-error-text);
+}
+
+.settings-reset-btn.is-destructive:hover:not(:disabled) {
+  background: var(--color-error-bg);
+}
+
+.settings-danger-action {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-danger-card {
+  border-color: var(--color-error-border);
+  grid-column: 1 / -1;
+}
+
+.settings-danger-card .settings-action-btn {
+  width: auto;
+  min-width: 220px;
+}
+
+/* In-place confirmation for a destructive action, so the question, its
+   consequences and both answers stay in the page and in the keyboard order. */
+.settings-confirm {
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  border-radius: 10px;
+  color: var(--color-error-text);
+  margin: 0 0 18px;
+  padding: 14px 16px;
+}
+
+.settings-confirm-title {
+  font-size: 15px;
+  font-weight: 800;
+  margin: 0 0 4px;
+}
+
+.settings-confirm-message {
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0 0 12px;
+}
+
+.settings-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.settings-confirm-actions .settings-action-btn {
+  width: auto;
+  padding: 9px 14px;
+  font-size: 13px;
+}
+
+.settings-selected-count {
+  font-weight: 700;
+  margin-top: 6px;
 }
 
 @media (max-width: 900px) {
@@ -463,17 +586,14 @@
     grid-column: auto;
   }
 
-  .settings-interface-card {
+  .settings-interface-card,
+  .settings-alerts-card,
+  .settings-danger-card {
     grid-column: auto;
   }
 
   .settings-theme-options {
     grid-template-columns: 1fr;
-  }
-
-  .settings-restore-section {
-    align-items: flex-start;
-    flex-direction: column;
   }
 
   .account-card {
@@ -482,5 +602,56 @@
 
   .settings-header h1 {
     font-size: 30px;
+  }
+}
+
+/* Phone widths: stack the rows that assume room for two columns, and let the
+   status chip wrap instead of forcing the header wider than the screen. */
+@media (max-width: 560px) {
+  .settings-page {
+    padding: 16px 14px;
+  }
+
+  .settings-card {
+    padding: 18px 16px;
+  }
+
+  .settings-header h1 {
+    font-size: 26px;
+  }
+
+  .settings-save-status {
+    white-space: normal;
+  }
+
+  .settings-banner {
+    flex-direction: column;
+  }
+
+  .settings-card-heading {
+    flex-direction: column;
+  }
+
+  .settings-choice-options {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-theme-actions {
+    justify-content: stretch;
+  }
+
+  .settings-theme-actions .settings-reset-btn,
+  .settings-theme-actions .settings-theme-save-btn {
+    flex: 1;
+  }
+
+  .settings-confirm-actions .settings-action-btn,
+  .settings-confirm-actions .settings-reset-btn {
+    flex: 1;
+  }
+
+  .settings-danger-card .settings-action-btn {
+    width: 100%;
+    min-width: 0;
   }
 }

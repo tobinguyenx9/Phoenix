@@ -9,10 +9,11 @@ import {
 } from 'react'
 import { PreferencesContext } from './PreferencesContext'
 import {
+  PREFERENCES_LOAD_STATUS,
   PREFERENCES_STORAGE_KEY,
   clearPreferences,
   getDefaultPreferences,
-  loadPreferences,
+  loadPreferencesWithStatus,
   savePreferences,
 } from './preferences'
 
@@ -41,7 +42,11 @@ const subscribeToSystemTheme = (onStoreChange) => {
 }
 
 export default function PreferencesProvider({ children }) {
-  const [preferences, setPreferences] = useState(loadPreferences)
+  // How the stored settings read on the way in, kept beside them so the
+  // Settings page can say that a stored value was unreadable and was replaced
+  // with a default, instead of that repair being silent.
+  const [loadResult, setLoadResult] = useState(loadPreferencesWithStatus)
+  const [preferences, setPreferences] = useState(loadResult.preferences)
   const preferencesRef = useRef(preferences)
   const systemTheme = useSyncExternalStore(subscribeToSystemTheme, getSystemTheme, () => 'light')
   const resolvedTheme = preferences.theme === 'system' ? systemTheme : preferences.theme
@@ -50,6 +55,13 @@ export default function PreferencesProvider({ children }) {
     preferencesRef.current = nextPreferences
     setPreferences(nextPreferences)
   }, [])
+
+  // A write supersedes whatever the previous load reported: the stored value is
+  // now one this version produced.
+  const applyLoadResult = useCallback((nextLoadResult) => {
+    setLoadResult(nextLoadResult)
+    replacePreferences(nextLoadResult.preferences)
+  }, [replacePreferences])
 
   useLayoutEffect(() => {
     const root = document.documentElement
@@ -78,12 +90,12 @@ export default function PreferencesProvider({ children }) {
         event.storageArea !== window.localStorage
         || (event.key !== PREFERENCES_STORAGE_KEY && event.key !== null)
       ) return
-      replacePreferences(loadPreferences())
+      applyLoadResult(loadPreferencesWithStatus())
     }
 
     window.addEventListener('storage', handleStorageChange)
     return () => window.removeEventListener('storage', handleStorageChange)
-  }, [replacePreferences])
+  }, [applyLoadResult])
 
   const updateUserPreferences = useCallback((partialUpdate) => {
     const currentPreferences = preferencesRef.current
@@ -97,7 +109,14 @@ export default function PreferencesProvider({ children }) {
 
     const result = savePreferences({ ...currentPreferences, ...intendedUpdate })
 
-    if (result.ok) replacePreferences(result.preferences)
+    if (result.ok) {
+      replacePreferences(result.preferences)
+      setLoadResult({
+        preferences: result.preferences,
+        status: PREFERENCES_LOAD_STATUS.LOADED,
+        invalidFields: [],
+      })
+    }
 
     return result.ok ? result : { ...result, preferences: currentPreferences }
   }, [replacePreferences])
@@ -110,24 +129,34 @@ export default function PreferencesProvider({ children }) {
     }
 
     const defaults = getDefaultPreferences()
-    replacePreferences(defaults)
+    applyLoadResult({
+      preferences: defaults,
+      status: PREFERENCES_LOAD_STATUS.DEFAULTS,
+      invalidFields: [],
+    })
     return { ok: true, preferences: defaults }
-  }, [replacePreferences])
+  }, [applyLoadResult])
 
   const reloadPreferences = useCallback(() => {
-    const nextPreferences = loadPreferences()
-    replacePreferences(nextPreferences)
-    return nextPreferences
-  }, [replacePreferences])
+    const nextLoadResult = loadPreferencesWithStatus()
+    applyLoadResult(nextLoadResult)
+    return nextLoadResult.preferences
+  }, [applyLoadResult])
 
   const contextValue = useMemo(() => ({
     preferences,
     resolvedTheme,
+    // { status, invalidFields } describing the most recent load. Additive: a
+    // consumer that does not need it is unaffected.
+    preferencesLoadStatus: loadResult.status,
+    invalidPreferenceFields: loadResult.invalidFields,
     updateUserPreferences,
     clearUserPreferences,
     reloadPreferences,
   }), [
     clearUserPreferences,
+    loadResult.invalidFields,
+    loadResult.status,
     preferences,
     reloadPreferences,
     resolvedTheme,

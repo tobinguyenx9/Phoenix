@@ -112,18 +112,111 @@ const readStoredPreferences = () => {
   return storedValue === null ? null : JSON.parse(storedValue)
 }
 
-export const loadPreferences = () => {
-  const defaults = getDefaultPreferences()
+// How a load ended. Settings that fail validation are replaced with defaults,
+// which is safe but silent: the reader sees their settings back at the defaults
+// with no explanation unless the page is told what happened.
+export const PREFERENCES_LOAD_STATUS = Object.freeze({
+  // Nothing stored yet: first visit on this device.
+  DEFAULTS: 'defaults',
+  LOADED: 'loaded',
+  // Some stored fields were invalid and were replaced with their defaults.
+  REPAIRED: 'repaired',
+  // Stored settings were written by a newer version of PHOENIX.
+  UNSUPPORTED_VERSION: 'unsupported-version',
+  // Storage could not be read at all, or did not contain settings.
+  UNREADABLE: 'unreadable',
+})
 
-  if (typeof window === 'undefined') return defaults
+// Reader-facing names for the stored fields, so a repair notice can say which
+// settings it had to reset rather than naming internal keys.
+const FIELD_LABELS = {
+  theme: 'theme',
+  reducedMotion: 'reduce motion',
+  density: 'content density',
+  largerText: 'larger text',
+  highContrast: 'high contrast',
+  dateFormat: 'date display format',
+  sidebarCollapsed: 'collapse desktop sidebar',
+  confirmImportantActions: 'confirm important actions',
+  alertTypes: 'alert filters',
+  locationTracking: 'location tracking',
+  alertRadius: 'alert radius',
+  location: 'saved location',
+}
+
+// Compares only the keys the stored value actually defines, so a partially
+// written record is judged on what it contains rather than what it omits.
+const matchesStoredValue = (storedValue, validatedValue) => {
+  if (storedValue === validatedValue) return true
+
+  if (isRecord(storedValue) && isRecord(validatedValue)) {
+    return Object.keys(storedValue).every(
+      (key) => matchesStoredValue(storedValue[key], validatedValue[key]),
+    )
+  }
+
+  return false
+}
+
+export const findInvalidPreferenceFields = (storedPreferences) => {
+  if (!isRecord(storedPreferences)) return []
+
+  const validated = validatePreferences(storedPreferences)
+
+  return Object.keys(getDefaultPreferences())
+    .filter((key) => key !== 'version')
+    .filter((key) => Object.prototype.hasOwnProperty.call(storedPreferences, key))
+    .filter((key) => !matchesStoredValue(storedPreferences[key], validated[key]))
+}
+
+export const describePreferenceFields = (fields = []) => {
+  const labels = fields.map((field) => FIELD_LABELS[field] || field)
+
+  if (labels.length === 0) return ''
+  if (labels.length === 1) return labels[0]
+
+  return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`
+}
+
+export const loadPreferencesWithStatus = () => {
+  const defaults = getDefaultPreferences()
+  const result = (status, preferences = defaults, invalidFields = []) => ({
+    preferences,
+    status,
+    invalidFields,
+  })
+
+  if (typeof window === 'undefined') return result(PREFERENCES_LOAD_STATUS.DEFAULTS)
+
+  let storedPreferences
 
   try {
-    const storedPreferences = readStoredPreferences()
-    return storedPreferences === null ? defaults : validatePreferences(storedPreferences)
+    storedPreferences = readStoredPreferences()
   } catch {
-    return defaults
+    // Unparseable JSON, or storage the browser refuses to read.
+    return result(PREFERENCES_LOAD_STATUS.UNREADABLE)
   }
+
+  if (storedPreferences === null) return result(PREFERENCES_LOAD_STATUS.DEFAULTS)
+
+  if (hasUnsupportedVersion(storedPreferences)) {
+    return result(PREFERENCES_LOAD_STATUS.UNSUPPORTED_VERSION)
+  }
+
+  if (!isRecord(storedPreferences)) return result(PREFERENCES_LOAD_STATUS.UNREADABLE)
+
+  const invalidFields = findInvalidPreferenceFields(storedPreferences)
+
+  return result(
+    invalidFields.length > 0
+      ? PREFERENCES_LOAD_STATUS.REPAIRED
+      : PREFERENCES_LOAD_STATUS.LOADED,
+    validatePreferences(storedPreferences),
+    invalidFields,
+  )
 }
+
+export const loadPreferences = () => loadPreferencesWithStatus().preferences
 
 export const savePreferences = (preferences) => {
   const safePreferences = validatePreferences(preferences)
